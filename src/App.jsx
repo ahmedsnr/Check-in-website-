@@ -1,1 +1,1620 @@
+import { useState, useEffect } from "react";
+import { db } from "./firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import {
+  Phone, MapPin, Instagram, Star, Clock, Lock, Plus, Trash2,
+  Pencil, Save, X, Globe, Menu as MenuIcon, ChevronRight, ChevronLeft,
+  Home as HomeIcon, UtensilsCrossed, Percent, MessageSquare, Info,
+  LogOut, Flame, Navigation, Check
+} from "lucide-react";
 
+/* ============================================================
+   STATIC DATA
+============================================================ */
+
+const CATEGORIES = [
+  { id: "burgers",     ar: "برغر",            en: "Burgers",     fr: "Burgers" },
+  { id: "sandwiches",  ar: "ساندويتشات",      en: "Sandwiches",  fr: "Sandwichs" },
+  { id: "tacos",       ar: "تاكو",            en: "Tacos",       fr: "Tacos" },
+  { id: "sides",       ar: "أطباق جانبية",    en: "Sides",       fr: "Accompagnements" },
+  { id: "drinks",      ar: "مشروبات",         en: "Drinks",      fr: "Boissons" },
+  { id: "desserts",    ar: "حلويات",          en: "Desserts",    fr: "Desserts" },
+];
+
+const DEFAULT_BRANCHES = [
+  {
+    id: "b1",
+    name: { ar: "سيدي بلعباس - شارع عيساط إيدير", en: "Sidi Bel Abbès - Aissat Idir St.", fr: "Sidi Bel Abbès - Rue Aissat Idir" },
+    address: "37 Bd Aissat Idir, Sidi Bel Abbès",
+    phone: "0542470837",
+    mapsUrl: "https://www.google.com/maps/dir/?api=1&destination=35.1949639,-0.6242211&destination_place_id=ChIJRxSP_g8Bfw0Rg72Gva44PkA",
+    hours: { ar: "يومياً 11:30 - 01:00 (الجمعة من 17:00)", en: "Daily 11:30 AM - 1:00 AM (Fri from 5:00 PM)", fr: "Tous les jours 11h30-1h00 (Ven à partir de 17h)" },
+  },
+  {
+    id: "b2",
+    name: { ar: "سيدي بلعباس - El Medina Center", en: "Sidi Bel Abbès - El Medina Center", fr: "Sidi Bel Abbès - El Medina Center" },
+    address: "Centre Commercial El Medina Center, Sidi Bel Abbès",
+    phone: "0656699683",
+    mapsUrl: "https://www.google.com/maps/dir/?api=1&destination=35.178633,-0.6418835&destination_place_id=ChIJd2ZGJwABfw0Rqx4eo06SGQk",
+    hours: { ar: "يومياً 09:00 - 23:00", en: "Daily 9:00 AM - 11:00 PM", fr: "Tous les jours 9h00-23h00" },
+  },
+  {
+    id: "b3",
+    name: { ar: "وهران - بئر الجير", en: "Oran - Bir El Djir", fr: "Oran - Bir El Djir" },
+    address: "Bd Millenium 1, Bir El Djir, Oran",
+    phone: "0554293009",
+    mapsUrl: "https://www.google.com/maps/dir/?api=1&destination=35.7208314,-0.5822442&destination_place_id=ChIJN9u91ZRjfg0RNUCiNnsZD6Y",
+    hours: { ar: "يومياً 11:00 - 05:00", en: "Daily 11:00 AM - 5:00 AM", fr: "Tous les jours 11h00-5h00" },
+  },
+];
+
+const DEFAULT_DISHES = [
+  { id: "d1", category: "burgers", emoji: "🍔", image: "", tag: "best",
+    name: { ar: "برغر كلاسيك", en: "Classic Burger", fr: "Burger Classique" },
+    desc: { ar: "قطعة لحم بقري طازجة، خس، طماطم وصلصة البيت", en: "Fresh beef patty, lettuce, tomato & house sauce", fr: "Steak de bœuf frais, laitue, tomate et sauce maison" },
+    prices: { b1: 450, b2: 450, b3: 500 }, ratingSum: 46, ratingCount: 10 },
+  { id: "d2", category: "burgers", emoji: "🍔", image: "", tag: "new",
+    name: { ar: "برغر تشيز دبل", en: "Double Cheese Burger", fr: "Double Cheeseburger" },
+    desc: { ar: "طبقتين لحم، جبن مزدوج وصلصة حارة", en: "Double patty, double cheese & spicy sauce", fr: "Double steak, double fromage et sauce épicée" },
+    prices: { b1: 580, b2: 580, b3: 630 }, ratingSum: 0, ratingCount: 0 },
+  { id: "d3", category: "tacos", emoji: "🌮", image: "", tag: "",
+    name: { ar: "تاكو دجاج مقرمش", en: "Crispy Chicken Tacos", fr: "Tacos Poulet Croustillant" },
+    desc: { ar: "دجاج مقرمش، خضار طازجة وصلصة خاصة", en: "Crispy chicken, fresh veggies & special sauce", fr: "Poulet croustillant, légumes frais et sauce spéciale" },
+    prices: { b1: 400, b2: 400, b3: 450 }, ratingSum: 18, ratingCount: 4 },
+  { id: "d4", category: "sandwiches", emoji: "🥪", image: "", tag: "",
+    name: { ar: "ساندويتش كريسبي", en: "Crispy Sandwich", fr: "Sandwich Crispy" },
+    desc: { ar: "دجاج مقرمش مع جبنة وخس داخل خبز طري", en: "Crispy chicken with cheese & lettuce in soft bread", fr: "Poulet croustillant, fromage et laitue dans un pain moelleux" },
+    prices: { b1: 380, b2: 380, b3: 420 }, ratingSum: 0, ratingCount: 0 },
+  { id: "d5", category: "sides", emoji: "🍟", image: "", tag: "",
+    name: { ar: "بطاطا مقلية", en: "French Fries", fr: "Frites" },
+    desc: { ar: "بطاطا مقرمشة طازجة مع التوابل الخاصة", en: "Crispy fresh fries with our special seasoning", fr: "Frites croustillantes avec notre assaisonnement spécial" },
+    prices: { b1: 200, b2: 200, b3: 220 }, ratingSum: 0, ratingCount: 0 },
+  { id: "d6", category: "drinks", emoji: "🥤", image: "", tag: "",
+    name: { ar: "مشروب غازي", en: "Soft Drink", fr: "Boisson Gazeuse" },
+    desc: { ar: "بارد ومنعش، عدة أنواع متوفرة", en: "Cold & refreshing, several flavors available", fr: "Frais et désaltérant, plusieurs saveurs disponibles" },
+    prices: { b1: 100, b2: 100, b3: 120 }, ratingSum: 0, ratingCount: 0 },
+  { id: "d7", category: "desserts", emoji: "🍩", image: "", tag: "new",
+    name: { ar: "دونات شوكولاتة", en: "Chocolate Donut", fr: "Donut au Chocolat" },
+    desc: { ar: "دونات طرية مغطاة بالشوكولاتة", en: "Soft donut covered in chocolate glaze", fr: "Donut moelleux nappé de chocolat" },
+    prices: { b1: 250, b2: 250, b3: 280 }, ratingSum: 0, ratingCount: 0 },
+];
+
+const DEFAULT_OFFERS = [
+  { id: "o1", emoji: "🔥", discount: 20,
+    title: { ar: "عرض الوجبة المزدوجة", en: "Combo Deal", fr: "Offre Combo" },
+    desc: { ar: "برغر + بطاطا + مشروب بسعر مميز، كل يوم", en: "Burger + Fries + Drink at a special price, every day", fr: "Burger + Frites + Boisson à prix spécial, tous les jours" } },
+  { id: "o2", emoji: "🎓", discount: 15,
+    title: { ar: "عرض الطلاب", en: "Student Offer", fr: "Offre Étudiants" },
+    desc: { ar: "خصم خاص لطلاب الجامعات والمعاهد عند تقديم البطاقة", en: "Special discount for university students with student ID", fr: "Réduction spéciale pour les étudiants sur présentation de la carte" } },
+];
+
+const DEFAULT_REVIEWS = [
+  { id: "r1", name: "Yacine", rating: 5, comment: { ar: "أفضل برغر جربته في سيدي بلعباس، خدمة سريعة!", en: "Best burger I've had in Sidi Bel Abbès, fast service!", fr: "Le meilleur burger de Sidi Bel Abbès, service rapide !" }, lang: "ar" },
+  { id: "r2", name: "Amine", rating: 4, comment: { ar: "التاكو رائع والأسعار معقولة جداً", en: "The tacos are great and prices are very reasonable", fr: "Les tacos sont excellents et les prix très raisonnables" }, lang: "fr" },
+];
+
+const DEFAULT_SETTINGS = {
+  instagram: "check_in",
+  about: {
+    ar: "Check'in هو مطعم أكل سريع جزائري بدأ بفكرة بسيطة: تقديم وجبات سريعة بطعم لا يُنسى وجودة لا تتغير. اليوم نملك عدة فروع في سيدي بلعباس ووهران، ونعمل كل يوم على تقديم الأفضل لزبائننا.",
+    en: "Check'in is an Algerian fast food restaurant born from a simple idea: serve unforgettable food with consistent quality, fast. Today we have several branches across Sidi Bel Abbès and Oran, and we work every day to give our customers the best.",
+    fr: "Check'in est un restaurant de fast-food algérien né d'une idée simple : servir une cuisine inoubliable avec une qualité constante, rapidement. Aujourd'hui, nous avons plusieurs succursales à Sidi Bel Abbès et Oran, et nous travaillons chaque jour pour offrir le meilleur à nos clients.",
+  },
+  adminPassword: "checkin2026",
+};
+
+/* ============================================================
+   TRANSLATIONS
+============================================================ */
+
+const TXT = {
+  ar: {
+    brand: "Check'in", tagline: "FAST FOOD",
+    hero_title: "جوّك سريع... طعمك Check'in",
+    hero_sub: "برغر، تاكو، ساندويتشات وأكثر — طازج كل يوم في فروعنا",
+    call_now: "اتصل الآن", view_menu: "شاهد القائمة",
+    nav_home: "الرئيسية", nav_menu: "القائمة", nav_offers: "العروض",
+    nav_reviews: "التقييمات", nav_about: "من نحن", nav_contact: "تواصل",
+    nav_location: "الفروع", nav_admin: "لوحة التحكم",
+    open_now: "مفتوح الآن", hours_label: "أوقات العمل",
+    section_menu_title: "قائمة الطعام", all_categories: "الكل",
+    price_unit: "دج", rate_dish: "قيّم هذا الطبق",
+    new_tag: "جديد", best_tag: "الأكثر طلباً",
+    about_title: "قصتنا",
+    contact_title: "تواصل معنا", follow_us: "تابعونا على انستغرام",
+    phone_label: "الهاتف",
+    location_title: "فروعنا", get_directions: "الاتجاهات",
+    offers_title: "العروض والتخفيضات", no_offers: "لا توجد عروض حالياً",
+    reviews_title: "آراء عملائنا", add_review: "أضف رأيك",
+    your_name: "اسمك", your_review: "اكتب رأيك هنا...",
+    submit: "إرسال", no_reviews: "لا توجد تقييمات بعد، كن أول من يشارك رأيه!",
+    thanks_review: "شكراً لمشاركتك رأيك!",
+    admin_login_title: "دخول لوحة التحكم", admin_password: "كلمة المرور",
+    admin_login_btn: "دخول", wrong_password: "كلمة المرور غير صحيحة",
+    admin_logout: "تسجيل الخروج",
+    tab_dishes: "الأطباق", tab_offers: "العروض", tab_settings: "الإعدادات",
+    tab_branches: "الفروع", tab_about: "من نحن",
+    add_dish: "إضافة طبق جديد", edit_dish: "تعديل الطبق",
+    dish_name_ar: "الاسم (عربي)", dish_name_en: "الاسم (إنجليزي)", dish_name_fr: "الاسم (فرنسي)",
+    dish_desc_ar: "الوصف (عربي)", dish_desc_en: "الوصف (إنجليزي)", dish_desc_fr: "الوصف (فرنسي)",
+    dish_category: "التصنيف",
+    dish_emoji: "أيقونة (إيموجي)", dish_tag: "وسم خاص",
+    tag_none: "بدون", tag_new: "جديد", tag_best: "الأكثر طلباً",
+    save: "حفظ", cancel: "إلغاء", delete: "حذف", edit: "تعديل",
+    add_offer: "إضافة عرض جديد",
+    offer_desc_ar: "الوصف (عربي)", offer_desc_en: "الوصف (إنجليزي)", offer_desc_fr: "الوصف (فرنسي)",
+    offer_title_ar: "العنوان (عربي)", offer_title_en: "العنوان (إنجليزي)", offer_title_fr: "العنوان (فرنسي)",
+    offer_discount: "نسبة الخصم %", offer_emoji: "إيموجي",
+    instagram_handle: "حساب انستغرام (بدون @)",
+    change_password: "تغيير كلمة المرور", new_password: "كلمة المرور الجديدة",
+    settings_saved: "تم الحفظ بنجاح ✓",
+    upload_image: "صورة الطبق", processing_image: "جاري معالجة الصورة...",
+    remove_image: "إزالة الصورة", image_hint: "اختر صورة من جهازك، ستُصغّر تلقائياً لتحميل أسرع",
+    welcome_admin: "مرحباً بك في لوحة التحكم",
+    no_dishes: "لا توجد أطباق في هذا التصنيف",
+    star_label: "تقييمات",
+    price_for: "السعر في",
+    add_branch: "إضافة فرع جديد", edit_branch: "تعديل الفرع",
+    branch_name_ar: "اسم الفرع (عربي)", branch_name_en: "اسم الفرع (إنجليزي)", branch_name_fr: "اسم الفرع (فرنسي)",
+    branch_address: "العنوان", branch_phone: "رقم الهاتف", branch_maps: "رابط خرائط جوجل",
+    branch_hours_ar: "أوقات العمل (عربي)", branch_hours_en: "أوقات العمل (إنجليزي)", branch_hours_fr: "أوقات العمل (فرنسي)",
+    branch_maps_hint: "افتح الفرع في تطبيق خرائط جوجل، اضغط مشاركة وألصق الرابط هنا",
+    about_edit_ar: "نص «من نحن» (عربي)", about_edit_en: "نص «من نحن» (إنجليزي)", about_edit_fr: "نص «من نحن» (فرنسي)",
+    choose_branch: "اختر فرعك", choose_branch_sub: "لعرض الأسعار الخاصة بالفرع الأقرب إليك",
+    change_branch: "تغيير", you_are_viewing: "أنت تتصفح أسعار فرع:",
+    select: "اختيار",
+  },
+  en: {
+    brand: "Check'in", tagline: "FAST FOOD",
+    hero_title: "Fast vibes, real taste — Check'in",
+    hero_sub: "Burgers, tacos, sandwiches & more — fresh daily at all our branches",
+    call_now: "Call Now", view_menu: "View Menu",
+    nav_home: "Home", nav_menu: "Menu", nav_offers: "Offers",
+    nav_reviews: "Reviews", nav_about: "About", nav_contact: "Contact",
+    nav_location: "Branches", nav_admin: "Admin Panel",
+    open_now: "Open Now", hours_label: "Opening Hours",
+    section_menu_title: "Our Menu", all_categories: "All",
+    price_unit: "DA", rate_dish: "Rate this dish",
+    new_tag: "New", best_tag: "Best Seller",
+    about_title: "Our Story",
+    contact_title: "Get in Touch", follow_us: "Follow us on Instagram",
+    phone_label: "Phone",
+    location_title: "Our Branches", get_directions: "Get Directions",
+    offers_title: "Offers & Deals", no_offers: "No offers available right now",
+    reviews_title: "Customer Reviews", add_review: "Add Your Review",
+    your_name: "Your name", your_review: "Write your review...",
+    submit: "Submit", no_reviews: "No reviews yet — be the first to share!",
+    thanks_review: "Thanks for sharing your review!",
+    admin_login_title: "Admin Login", admin_password: "Password",
+    admin_login_btn: "Login", wrong_password: "Incorrect password",
+    admin_logout: "Log Out",
+    tab_dishes: "Dishes", tab_offers: "Offers", tab_settings: "Settings",
+    tab_branches: "Branches", tab_about: "About",
+    add_dish: "Add New Dish", edit_dish: "Edit Dish",
+    dish_name_ar: "Name (Arabic)", dish_name_en: "Name (English)", dish_name_fr: "Name (French)",
+    dish_desc_ar: "Description (Arabic)", dish_desc_en: "Description (English)", dish_desc_fr: "Description (French)",
+    dish_category: "Category",
+    dish_emoji: "Icon (emoji)", dish_tag: "Special Tag",
+    tag_none: "None", tag_new: "New", tag_best: "Best Seller",
+    save: "Save", cancel: "Cancel", delete: "Delete", edit: "Edit",
+    add_offer: "Add New Offer",
+    offer_desc_ar: "Description (Arabic)", offer_desc_en: "Description (English)", offer_desc_fr: "Description (French)",
+    offer_title_ar: "Title (Arabic)", offer_title_en: "Title (English)", offer_title_fr: "Title (French)",
+    offer_discount: "Discount %", offer_emoji: "Emoji",
+    instagram_handle: "Instagram handle (without @)",
+    change_password: "Change Password", new_password: "New password",
+    settings_saved: "Saved successfully ✓",
+    upload_image: "Dish photo", processing_image: "Processing image...",
+    remove_image: "Remove image", image_hint: "Choose a photo from your device — it's resized automatically for faster loading",
+    welcome_admin: "Welcome to the admin panel",
+    no_dishes: "No dishes in this category",
+    star_label: "ratings",
+    price_for: "Price at",
+    add_branch: "Add New Branch", edit_branch: "Edit Branch",
+    branch_name_ar: "Branch name (Arabic)", branch_name_en: "Branch name (English)", branch_name_fr: "Branch name (French)",
+    branch_address: "Address", branch_phone: "Phone number", branch_maps: "Google Maps link",
+    branch_hours_ar: "Hours (Arabic)", branch_hours_en: "Hours (English)", branch_hours_fr: "Hours (French)",
+    branch_maps_hint: "Open the branch in Google Maps, tap Share, and paste the link here",
+    about_edit_ar: "'About' text (Arabic)", about_edit_en: "'About' text (English)", about_edit_fr: "'About' text (French)",
+    choose_branch: "Choose your branch", choose_branch_sub: "To see prices for the branch closest to you",
+    change_branch: "Change", you_are_viewing: "You're viewing prices for:",
+    select: "Select",
+  },
+  fr: {
+    brand: "Check'in", tagline: "FAST FOOD",
+    hero_title: "Le goût rapide, c'est Check'in",
+    hero_sub: "Burgers, tacos, sandwichs et plus — fraîcheur garantie dans toutes nos succursales",
+    call_now: "Appeler", view_menu: "Voir le menu",
+    nav_home: "Accueil", nav_menu: "Menu", nav_offers: "Offres",
+    nav_reviews: "Avis", nav_about: "À propos", nav_contact: "Contact",
+    nav_location: "Succursales", nav_admin: "Panneau Admin",
+    open_now: "Ouvert maintenant", hours_label: "Horaires",
+    section_menu_title: "Notre Menu", all_categories: "Tout",
+    price_unit: "DA", rate_dish: "Noter ce plat",
+    new_tag: "Nouveau", best_tag: "Best-seller",
+    about_title: "Notre Histoire",
+    contact_title: "Contactez-nous", follow_us: "Suivez-nous sur Instagram",
+    phone_label: "Téléphone",
+    location_title: "Nos Succursales", get_directions: "Itinéraire",
+    offers_title: "Offres et Promotions", no_offers: "Aucune offre disponible pour le moment",
+    reviews_title: "Avis Clients", add_review: "Ajouter votre avis",
+    your_name: "Votre nom", your_review: "Écrivez votre avis...",
+    submit: "Envoyer", no_reviews: "Aucun avis pour le moment — soyez le premier !",
+    thanks_review: "Merci pour votre avis !",
+    admin_login_title: "Connexion Admin", admin_password: "Mot de passe",
+    admin_login_btn: "Connexion", wrong_password: "Mot de passe incorrect",
+    admin_logout: "Déconnexion",
+    tab_dishes: "Plats", tab_offers: "Offres", tab_settings: "Paramètres",
+    tab_branches: "Succursales", tab_about: "À propos",
+    add_dish: "Ajouter un plat", edit_dish: "Modifier le plat",
+    dish_name_ar: "Nom (arabe)", dish_name_en: "Nom (anglais)", dish_name_fr: "Nom (français)",
+    dish_desc_ar: "Description (arabe)", dish_desc_en: "Description (anglais)", dish_desc_fr: "Description (français)",
+    dish_category: "Catégorie",
+    dish_emoji: "Icône (emoji)", dish_tag: "Étiquette spéciale",
+    tag_none: "Aucune", tag_new: "Nouveau", tag_best: "Best-seller",
+    save: "Enregistrer", cancel: "Annuler", delete: "Supprimer", edit: "Modifier",
+    add_offer: "Ajouter une offre",
+    offer_desc_ar: "Description (arabe)", offer_desc_en: "Description (anglais)", offer_desc_fr: "Description (français)",
+    offer_title_ar: "Titre (arabe)", offer_title_en: "Titre (anglais)", offer_title_fr: "Titre (français)",
+    offer_discount: "Remise %", offer_emoji: "Emoji",
+    instagram_handle: "Compte Instagram (sans @)",
+    change_password: "Changer le mot de passe", new_password: "Nouveau mot de passe",
+    settings_saved: "Enregistré avec succès ✓",
+    upload_image: "Photo du plat", processing_image: "Traitement de l'image...",
+    remove_image: "Supprimer l'image", image_hint: "Choisissez une photo depuis votre appareil — elle sera redimensionnée automatiquement",
+    welcome_admin: "Bienvenue dans le panneau admin",
+    no_dishes: "Aucun plat dans cette catégorie",
+    star_label: "avis",
+    price_for: "Prix à",
+    add_branch: "Ajouter une succursale", edit_branch: "Modifier la succursale",
+    branch_name_ar: "Nom de la succursale (arabe)", branch_name_en: "Nom de la succursale (anglais)", branch_name_fr: "Nom de la succursale (français)",
+    branch_address: "Adresse", branch_phone: "Numéro de téléphone", branch_maps: "Lien Google Maps",
+    branch_hours_ar: "Horaires (arabe)", branch_hours_en: "Horaires (anglais)", branch_hours_fr: "Horaires (français)",
+    branch_maps_hint: "Ouvrez la succursale dans Google Maps, appuyez sur Partager et collez le lien ici",
+    about_edit_ar: "Texte « À propos » (arabe)", about_edit_en: "Texte « À propos » (anglais)", about_edit_fr: "Texte « À propos » (français)",
+    choose_branch: "Choisissez votre succursale", choose_branch_sub: "Pour voir les prix de la succursale la plus proche",
+    change_branch: "Changer", you_are_viewing: "Vous consultez les prix de :",
+    select: "Choisir",
+  },
+};
+
+/* ============================================================
+   HELPERS
+============================================================ */
+
+const catLabel = (cat, lang) => {
+  const c = CATEGORIES.find((c) => c.id === cat);
+  return c ? c[lang] : cat;
+};
+
+const STORAGE_KEYS = {
+  dishes: "checkin:dishes",
+  offers: "checkin:offers",
+  reviews: "checkin:reviews",
+  settings: "checkin:settings",
+  branches: "checkin:branches",
+};
+
+async function loadShared(key, fallback) {
+  try {
+    const snap = await getDoc(doc(db, "checkin", key));
+    if (snap.exists()) return snap.data().value;
+  } catch (e) {
+    console.error("Firestore load failed", e);
+  }
+  try {
+    await setDoc(doc(db, "checkin", key), { value: fallback });
+  } catch (e) {}
+  return fallback;
+}
+
+async function saveShared(key, value) {
+  try {
+    await setDoc(doc(db, "checkin", key), { value });
+  } catch (e) {
+    console.error("Firestore save failed", e);
+  }
+}
+
+function loadPersonal(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return fallback;
+}
+
+function savePersonal(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {}
+}
+
+// Reads an image file, resizes it down and returns a compressed base64 data URL
+function fileToCompressedDataUrl(file, maxWidth = 480, quality = 0.6) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function telHref(phone) {
+  if (!phone) return "tel:";
+  const cleaned = phone.replace(/[\s-]/g, "");
+  if (cleaned.startsWith("0")) return "tel:+213" + cleaned.slice(1);
+  if (cleaned.startsWith("+")) return "tel:" + cleaned;
+  return "tel:+213" + cleaned;
+}
+
+function getPrice(dish, branchId, branches) {
+  if (!dish.prices) return 0;
+  if (dish.prices[branchId] != null) return dish.prices[branchId];
+  const first = branches[0]?.id;
+  return dish.prices[first] ?? 0;
+}
+
+/* ============================================================
+   SMALL UI PIECES
+============================================================ */
+
+function Stars({ value, onRate, size = 18 }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onRate && onRate(n)}
+          onMouseEnter={() => onRate && setHover(n)}
+          onMouseLeave={() => onRate && setHover(0)}
+          className={onRate ? "cursor-pointer transition-transform hover:scale-125" : "cursor-default"}
+          aria-label={`${n} star`}
+        >
+          <Star
+            size={size}
+            fill={(hover || value) >= n ? "#FFB627" : "none"}
+            color={(hover || value) >= n ? "#FFB627" : "#D9C7C0"}
+            strokeWidth={1.5}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Sticker({ children, className = "", style = {} }) {
+  return (
+    <div
+      className={`sticker ${className}`}
+      style={{
+        clipPath:
+          "polygon(50% 0%, 61% 12%, 75% 6%, 80% 20%, 95% 20%, 93% 35%, 100% 50%, 93% 65%, 95% 80%, 80% 80%, 75% 94%, 61% 88%, 50% 100%, 39% 88%, 25% 94%, 20% 80%, 5% 80%, 7% 65%, 0% 50%, 7% 35%, 5% 20%, 20% 20%, 25% 6%, 39% 12%)",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function DishImage({ dish, size = "h-32" }) {
+  if (dish.image) {
+    return <img src={dish.image} alt="" className={`w-full ${size} object-cover rounded-2xl`} />;
+  }
+  return (
+    <div className={`w-full ${size} rounded-2xl flex items-center justify-center text-5xl`} style={{ background: "linear-gradient(135deg,#FBE3E9,#FCEFD8)" }}>
+      {dish.emoji || "🍽️"}
+    </div>
+  );
+}
+
+/* ============================================================
+   MAIN APP
+============================================================ */
+
+export default function App() {
+  const [lang, setLang] = useState("ar");
+  const [page, setPage] = useState("home");
+  const [navOpen, setNavOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const [dishes, setDishes] = useState(null);
+  const [offers, setOffers] = useState(null);
+  const [reviews, setReviews] = useState(null);
+  const [settings, setSettings] = useState(null);
+  const [branches, setBranches] = useState(null);
+  const [selectedBranchId, setSelectedBranchId] = useState(null);
+
+  const [adminAuthed, setAdminAuthed] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const loadedBranches = await loadShared(STORAGE_KEYS.branches, DEFAULT_BRANCHES);
+      setDishes(await loadShared(STORAGE_KEYS.dishes, DEFAULT_DISHES));
+      setOffers(await loadShared(STORAGE_KEYS.offers, DEFAULT_OFFERS));
+      setReviews(await loadShared(STORAGE_KEYS.reviews, DEFAULT_REVIEWS));
+      setSettings(await loadShared(STORAGE_KEYS.settings, DEFAULT_SETTINGS));
+      setBranches(loadedBranches);
+
+      const savedBranch = await loadPersonal("checkin:selected-branch", null);
+      if (savedBranch && loadedBranches.find((b) => b.id === savedBranch)) {
+        setSelectedBranchId(savedBranch);
+      } else {
+        setSelectedBranchId(loadedBranches[0]?.id || null);
+      }
+    })();
+  }, []);
+
+  const dir = lang === "ar" ? "rtl" : "ltr";
+  const t = (k) => TXT[lang][k] || k;
+
+  const loading = !dishes || !offers || !reviews || !settings || !branches || !selectedBranchId;
+
+  const goTo = (p) => {
+    setPage(p);
+    setNavOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const chooseBranch = async (id) => {
+    setSelectedBranchId(id);
+    await savePersonal("checkin:selected-branch", id);
+    setPickerOpen(false);
+  };
+
+  const ChevronDir = lang === "ar" ? ChevronLeft : ChevronRight;
+
+  const navItems = [
+    { id: "home", label: t("nav_home"), icon: HomeIcon },
+    { id: "menu", label: t("nav_menu"), icon: UtensilsCrossed },
+    { id: "offers", label: t("nav_offers"), icon: Percent },
+    { id: "about", label: t("nav_about"), icon: Info },
+    { id: "reviews", label: t("nav_reviews"), icon: MessageSquare },
+    { id: "location", label: t("nav_location"), icon: MapPin },
+    { id: "contact", label: t("nav_contact"), icon: Phone },
+  ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#FFF8F0" }}>
+        <div className="text-center">
+          <div className="logo-spin text-6xl mb-3">🅒</div>
+          <p style={{ color: "#9C1B47", fontFamily: "'Cairo',sans-serif" }}>Check'in</p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentBranch = branches.find((b) => b.id === selectedBranchId) || branches[0];
+
+  return (
+    <div dir={dir} className="min-h-screen pb-24" style={{ background: "#FFF8F0", color: "#2B1820", fontFamily: "'Cairo', sans-serif" }}>
+      <GlobalStyle />
+
+      {/* HEADER */}
+      <header className="sticky top-0 z-40 backdrop-blur-md" style={{ background: "rgba(255,248,240,0.92)", borderBottom: "1px solid #F1DCD0" }}>
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <button onClick={() => goTo("home")} className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-extrabold text-lg" style={{ background: "#9C1B47" }}>
+              C
+            </div>
+            <div style={{ textAlign: lang === "ar" ? "right" : "left" }}>
+              <div className="font-extrabold text-lg leading-none" style={{ fontFamily: "'Baloo 2', sans-serif", color: "#9C1B47" }}>
+                {t("brand")}
+              </div>
+              <div className="text-[10px] tracking-widest font-bold opacity-60">{t("tagline")}</div>
+            </div>
+          </button>
+
+          <div className="flex items-center gap-2">
+            <LangSwitch lang={lang} setLang={setLang} />
+            <button
+              onClick={() => setNavOpen(true)}
+              className="w-10 h-10 rounded-full flex items-center justify-center"
+              style={{ background: "#9C1B47", color: "#fff" }}
+              aria-label="menu"
+            >
+              <MenuIcon size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* BRANCH PILL */}
+        <div className="max-w-5xl mx-auto px-4 pb-2">
+          <button onClick={() => setPickerOpen(true)} className="branch-pill">
+            <MapPin size={14} />
+            <span className="truncate">{currentBranch.name[lang]}</span>
+            <span className="opacity-60 font-bold flex-shrink-0">· {t("change_branch")}</span>
+          </button>
+        </div>
+      </header>
+
+      {/* BRANCH PICKER MODAL */}
+      {pickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setPickerOpen(false)}>
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-extrabold text-lg text-center mb-1">{t("choose_branch")}</h2>
+            <p className="text-sm opacity-60 text-center mb-4">{t("choose_branch_sub")}</p>
+            <div className="space-y-2">
+              {branches.map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() => chooseBranch(b.id)}
+                  className="w-full text-start card flex items-center gap-3"
+                  style={b.id === selectedBranchId ? { borderColor: "#9C1B47", background: "#FBE7EE" } : {}}
+                >
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: "#9C1B47" }}>
+                    {b.id === selectedBranchId ? <Check size={18} /> : <MapPin size={18} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-extrabold text-sm leading-tight">{b.name[lang]}</div>
+                    <div className="text-xs opacity-60 truncate">{b.address}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NAV DRAWER */}
+      {navOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="flex-1 bg-black/40" onClick={() => setNavOpen(false)} />
+          <div
+            className="w-72 max-w-[80%] h-full p-5 flex flex-col gap-2 animate-slidein"
+            style={{ background: "#fff", [dir === "rtl" ? "marginRight" : "marginLeft"]: "auto" }}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <span className="font-extrabold text-xl" style={{ color: "#9C1B47", fontFamily: "'Baloo 2', sans-serif" }}>{t("brand")}</span>
+              <button onClick={() => setNavOpen(false)}><X size={22} /></button>
+            </div>
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => goTo(item.id)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-bold transition-colors"
+                  style={{ background: page === item.id ? "#FBE7EE" : "transparent", color: page === item.id ? "#9C1B47" : "#2B1820" }}
+                >
+                  <Icon size={20} />
+                  {item.label}
+                  <ChevronDir size={16} className="opacity-40" style={{ marginInlineStart: "auto" }} />
+                </button>
+              );
+            })}
+            <div className="border-t my-2" style={{ borderColor: "#F1DCD0" }} />
+            <button
+              onClick={() => goTo("admin")}
+              className="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-bold opacity-70"
+            >
+              <Lock size={18} />
+              {t("nav_admin")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PAGES */}
+      <main className="max-w-5xl mx-auto px-4 pt-4">
+        {page === "home" && <HomePage t={t} lang={lang} goTo={goTo} dishes={dishes} offers={offers} branches={branches} selectedBranchId={selectedBranchId} currentBranch={currentBranch} />}
+        {page === "menu" && <MenuPage t={t} lang={lang} dishes={dishes} setDishes={setDishes} branches={branches} selectedBranchId={selectedBranchId} />}
+        {page === "offers" && <OffersPage t={t} lang={lang} offers={offers} />}
+        {page === "about" && <AboutPage t={t} lang={lang} settings={settings} branches={branches} />}
+        {page === "reviews" && <ReviewsPage t={t} lang={lang} reviews={reviews} setReviews={setReviews} />}
+        {page === "location" && <LocationPage t={t} lang={lang} branches={branches} selectedBranchId={selectedBranchId} chooseBranch={chooseBranch} />}
+        {page === "contact" && <ContactPage t={t} lang={lang} settings={settings} currentBranch={currentBranch} branches={branches} />}
+        {page === "admin" && (
+          <AdminPage
+            t={t} lang={lang}
+            adminAuthed={adminAuthed} setAdminAuthed={setAdminAuthed}
+            dishes={dishes} setDishes={setDishes}
+            offers={offers} setOffers={setOffers}
+            settings={settings} setSettings={setSettings}
+            branches={branches} setBranches={setBranches}
+            selectedBranchId={selectedBranchId} setSelectedBranchId={setSelectedBranchId}
+          />
+        )}
+      </main>
+
+      {/* FOOTER */}
+      <footer className="max-w-5xl mx-auto px-4 mt-10 pb-6 text-center text-sm opacity-60">
+        <div className="font-extrabold mb-1" style={{ color: "#9C1B47", fontFamily: "'Baloo 2', sans-serif" }}>{t("brand")}</div>
+        <div>© {new Date().getFullYear()} Check'in — {currentBranch.hours[lang]}</div>
+      </footer>
+
+      {/* FLOATING CALL BUTTON */}
+      <a
+        href={telHref(currentBranch.phone)}
+        className="fixed bottom-5 z-40 rounded-full shadow-lg flex items-center justify-center w-14 h-14 animate-pulse-slow"
+        style={{ background: "#FF7A3D", color: "#fff", [dir === "rtl" ? "left" : "right"]: "1.25rem" }}
+        aria-label={t("call_now")}
+      >
+        <Phone size={24} />
+      </a>
+    </div>
+  );
+}
+
+/* ============================================================
+   LANGUAGE SWITCH
+============================================================ */
+
+function LangSwitch({ lang, setLang }) {
+  const [open, setOpen] = useState(false);
+  const langs = [
+    { id: "ar", label: "AR" },
+    { id: "en", label: "EN" },
+    { id: "fr", label: "FR" },
+  ];
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs border-2"
+        style={{ borderColor: "#9C1B47", color: "#9C1B47" }}
+      >
+        <Globe size={18} />
+      </button>
+      {open && (
+        <div className="absolute top-12 right-0 bg-white rounded-xl shadow-lg overflow-hidden z-50 min-w-[80px]" style={{ border: "1px solid #F1DCD0" }}>
+          {langs.map((l) => (
+            <button
+              key={l.id}
+              onClick={() => { setLang(l.id); setOpen(false); }}
+              className="block w-full text-center px-4 py-2 text-sm font-bold hover:bg-rose-50"
+              style={{ color: lang === l.id ? "#9C1B47" : "#2B1820", background: lang === l.id ? "#FBE7EE" : "transparent" }}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   HOME PAGE
+============================================================ */
+
+function HomePage({ t, lang, goTo, dishes, offers, branches, selectedBranchId, currentBranch }) {
+  const featured = dishes.filter((d) => d.tag === "best" || d.tag === "new").slice(0, 4);
+  return (
+    <div className="space-y-10">
+      {/* HERO */}
+      <section className="relative overflow-hidden rounded-3xl px-6 py-12 text-center" style={{ background: "linear-gradient(135deg,#9C1B47 0%,#C2295F 100%)" }}>
+        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-20" style={{ background: "#FFB627" }} />
+        <div className="absolute -bottom-14 -left-14 w-48 h-48 rounded-full opacity-15" style={{ background: "#FF7A3D" }} />
+        <div className="relative z-10">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-4 text-xs font-extrabold" style={{ background: "rgba(255,255,255,0.18)", color: "#FFE9D6" }}>
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" /> {t("open_now")}
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-3 leading-tight" style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+            {t("hero_title")}
+          </h1>
+          <p className="text-rose-100 mb-7 max-w-md mx-auto">{t("hero_sub")}</p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button onClick={() => goTo("menu")} className="btn-accent">
+              <UtensilsCrossed size={18} /> {t("view_menu")}
+            </button>
+            <a href={telHref(currentBranch.phone)} className="btn-outline-light">
+              <Phone size={18} /> {t("call_now")}
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* HOURS STRIP */}
+      <section className="flex items-center gap-3 rounded-2xl px-5 py-4" style={{ background: "#FFF1E3" }}>
+        <Clock size={22} style={{ color: "#FF7A3D" }} />
+        <div>
+          <div className="text-xs font-bold opacity-60">{t("hours_label")} · {currentBranch.name[lang]}</div>
+          <div className="font-extrabold">{currentBranch.hours[lang]}</div>
+        </div>
+      </section>
+
+      {/* FEATURED DISHES */}
+      {featured.length > 0 && (
+        <section>
+          <SectionTitle icon={Flame} title={t("section_menu_title")} />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
+            {featured.map((d) => (
+              <div key={d.id} className="card relative">
+                {d.tag && (
+                  <Sticker className="absolute -top-3 z-10 w-14 h-14 flex items-center justify-center text-[10px] font-extrabold text-white" style={{ background: d.tag === "new" ? "#FF7A3D" : "#9C1B47", insetInlineStart: "-0.5rem" }}>
+                    {d.tag === "new" ? t("new_tag") : t("best_tag")}
+                  </Sticker>
+                )}
+                <DishImage dish={d} size="h-24" />
+                <div className="mt-2 font-extrabold text-sm leading-tight">{d.name[lang]}</div>
+                <div className="text-xs font-bold mt-1" style={{ color: "#9C1B47" }}>{getPrice(d, selectedBranchId, branches)} {t("price_unit")}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* OFFERS PREVIEW */}
+      {offers.length > 0 && (
+        <section>
+          <SectionTitle icon={Percent} title={t("offers_title")} />
+          <div className="grid sm:grid-cols-2 gap-4 mt-4">
+            {offers.slice(0, 2).map((o) => (
+              <OfferCard key={o.id} offer={o} lang={lang} t={t} />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function SectionTitle({ icon: Icon, title }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#9C1B47", color: "#fff" }}>
+        <Icon size={18} />
+      </div>
+      <h2 className="text-xl font-extrabold" style={{ fontFamily: "'Baloo 2', sans-serif" }}>{title}</h2>
+    </div>
+  );
+}
+
+/* ============================================================
+   MENU PAGE
+============================================================ */
+
+function MenuPage({ t, lang, dishes, setDishes, branches, selectedBranchId }) {
+  const [activeCat, setActiveCat] = useState("all");
+  const filtered = activeCat === "all" ? dishes : dishes.filter((d) => d.category === activeCat);
+
+  const rateDish = async (dishId, value) => {
+    const updated = dishes.map((d) =>
+      d.id === dishId ? { ...d, ratingSum: (d.ratingSum || 0) + value, ratingCount: (d.ratingCount || 0) + 1 } : d
+    );
+    setDishes(updated);
+    await saveShared(STORAGE_KEYS.dishes, updated);
+  };
+
+  return (
+    <div>
+      <h1 className="text-2xl font-extrabold mb-4" style={{ fontFamily: "'Baloo 2', sans-serif", color: "#9C1B47" }}>{t("section_menu_title")}</h1>
+
+      <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 no-scrollbar">
+        <CatPill active={activeCat === "all"} onClick={() => setActiveCat("all")}>{t("all_categories")}</CatPill>
+        {CATEGORIES.map((c) => (
+          <CatPill key={c.id} active={activeCat === c.id} onClick={() => setActiveCat(c.id)}>{c[lang]}</CatPill>
+        ))}
+      </div>
+
+      {filtered.length === 0 && <p className="text-center opacity-60 mt-10">{t("no_dishes")}</p>}
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+        {filtered.map((d) => {
+          const avg = d.ratingCount ? d.ratingSum / d.ratingCount : 0;
+          return (
+            <div key={d.id} className="card relative">
+              {d.tag && (
+                <Sticker className="absolute -top-3 z-10 w-14 h-14 flex items-center justify-center text-[10px] font-extrabold text-white" style={{ background: d.tag === "new" ? "#FF7A3D" : "#9C1B47", insetInlineStart: "-0.5rem" }}>
+                  {d.tag === "new" ? t("new_tag") : t("best_tag")}
+                </Sticker>
+              )}
+              <DishImage dish={d} />
+              <div className="mt-3 flex items-start justify-between gap-2">
+                <h3 className="font-extrabold leading-tight">{d.name[lang]}</h3>
+                <span className="font-extrabold whitespace-nowrap" style={{ color: "#9C1B47" }}>{getPrice(d, selectedBranchId, branches)} {t("price_unit")}</span>
+              </div>
+              <p className="text-sm opacity-70 mt-1 leading-snug">{d.desc[lang]}</p>
+              <div className="mt-3 flex items-center justify-between">
+                <div className="flex items-center gap-1 text-xs opacity-60">
+                  <Star size={14} fill="#FFB627" color="#FFB627" />
+                  {avg.toFixed(1)} ({d.ratingCount} {t("star_label")})
+                </div>
+              </div>
+              <div className="mt-2 pt-2 border-t" style={{ borderColor: "#F1DCD0" }}>
+                <div className="text-[11px] font-bold opacity-50 mb-1">{t("rate_dish")}</div>
+                <Stars value={0} onRate={(v) => rateDish(d.id, v)} size={20} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CatPill({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors flex-shrink-0"
+      style={{ background: active ? "#9C1B47" : "#FFF1E3", color: active ? "#fff" : "#2B1820" }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* ============================================================
+   OFFERS PAGE
+============================================================ */
+
+function OffersPage({ t, lang, offers }) {
+  return (
+    <div>
+      <h1 className="text-2xl font-extrabold mb-4" style={{ fontFamily: "'Baloo 2', sans-serif", color: "#9C1B47" }}>{t("offers_title")}</h1>
+      {offers.length === 0 ? (
+        <p className="text-center opacity-60 mt-10">{t("no_offers")}</p>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-4">
+          {offers.map((o) => <OfferCard key={o.id} offer={o} lang={lang} t={t} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OfferCard({ offer, lang, t }) {
+  return (
+    <div className="card flex items-center gap-4">
+      <div className="text-4xl">{offer.emoji}</div>
+      <div className="flex-1">
+        <h3 className="font-extrabold">{offer.title[lang]}</h3>
+        <p className="text-sm opacity-70 mt-0.5">{offer.desc[lang]}</p>
+      </div>
+      <Sticker className="w-16 h-16 flex flex-col items-center justify-center text-white flex-shrink-0" style={{ background: "#FF7A3D" }}>
+        <span className="font-extrabold text-lg leading-none">{offer.discount}%</span>
+      </Sticker>
+    </div>
+  );
+}
+
+/* ============================================================
+   ABOUT PAGE
+============================================================ */
+
+function AboutPage({ t, lang, settings, branches }) {
+  return (
+    <div>
+      <h1 className="text-2xl font-extrabold mb-4" style={{ fontFamily: "'Baloo 2', sans-serif", color: "#9C1B47" }}>{t("about_title")}</h1>
+      <div className="card">
+        <div className="text-6xl mb-4 text-center">🍔🌮🥤</div>
+        <p className="leading-relaxed text-base whitespace-pre-line">{settings.about[lang]}</p>
+      </div>
+      <div className="grid sm:grid-cols-3 gap-4 mt-4">
+        {branches.map((b) => (
+          <div key={b.id} className="card text-center">
+            <div className="text-3xl mb-2">📍</div>
+            <div className="font-extrabold">{b.name[lang]}</div>
+            <div className="text-xs opacity-60 mt-1">{b.address}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   REVIEWS PAGE
+============================================================ */
+
+function ReviewsPage({ t, lang, reviews, setReviews }) {
+  const [name, setName] = useState("");
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [sent, setSent] = useState(false);
+
+  const submit = async () => {
+    if (!name.trim() || !comment.trim()) return;
+    const newReview = { id: "r" + Date.now(), name: name.trim(), rating, comment: { [lang]: comment.trim() }, lang };
+    const updated = [newReview, ...reviews];
+    setReviews(updated);
+    await saveShared(STORAGE_KEYS.reviews, updated);
+    setName(""); setComment(""); setRating(5);
+    setSent(true);
+    setTimeout(() => setSent(false), 3000);
+  };
+
+  return (
+    <div>
+      <h1 className="text-2xl font-extrabold mb-4" style={{ fontFamily: "'Baloo 2', sans-serif", color: "#9C1B47" }}>{t("reviews_title")}</h1>
+
+      <div className="card mb-6">
+        <h3 className="font-extrabold mb-3">{t("add_review")}</h3>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("your_name")} className="input mb-2" />
+        <div className="mb-2"><Stars value={rating} onRate={setRating} size={24} /></div>
+        <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t("your_review")} className="input mb-2" rows={3} />
+        <button onClick={submit} className="btn-primary">{t("submit")}</button>
+        {sent && <p className="text-sm font-bold mt-2" style={{ color: "#2E7D32" }}>{t("thanks_review")}</p>}
+      </div>
+
+      {reviews.length === 0 ? (
+        <p className="text-center opacity-60 mt-10">{t("no_reviews")}</p>
+      ) : (
+        <div className="space-y-3">
+          {reviews.map((r) => (
+            <div key={r.id} className="card">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-extrabold">{r.name}</span>
+                <Stars value={r.rating} size={16} />
+              </div>
+              <p className="text-sm opacity-70">{r.comment[lang] || r.comment[r.lang] || Object.values(r.comment)[0]}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   LOCATION PAGE
+============================================================ */
+
+function LocationPage({ t, lang, branches, selectedBranchId, chooseBranch }) {
+  return (
+    <div>
+      <h1 className="text-2xl font-extrabold mb-4" style={{ fontFamily: "'Baloo 2', sans-serif", color: "#9C1B47" }}>{t("location_title")}</h1>
+      <div className="space-y-4">
+        {branches.map((b) => (
+          <div key={b.id} className="card">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: "#9C1B47" }}>
+                <MapPin size={24} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-extrabold">{b.name[lang]}</div>
+                <div className="text-sm opacity-70">{b.address}</div>
+                <div className="text-xs opacity-60 mt-1 flex items-center gap-1"><Clock size={12} /> {b.hours[lang]}</div>
+              </div>
+              {b.id === selectedBranchId && (
+                <Sticker className="w-12 h-12 flex items-center justify-center text-white flex-shrink-0" style={{ background: "#2E7D32" }}>
+                  <Check size={18} />
+                </Sticker>
+              )}
+            </div>
+            <div className="flex gap-2 mt-3">
+              <a href={b.mapsUrl} target="_blank" rel="noopener noreferrer" className="btn-primary text-sm flex-1 justify-center">
+                <Navigation size={16} /> {t("get_directions")}
+              </a>
+              <a href={telHref(b.phone)} className="btn-outline text-sm">
+                <Phone size={16} />
+              </a>
+              {b.id !== selectedBranchId && (
+                <button onClick={() => chooseBranch(b.id)} className="btn-outline text-sm whitespace-nowrap">
+                  {t("select")}
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   CONTACT PAGE
+============================================================ */
+
+function ContactPage({ t, lang, settings, currentBranch, branches }) {
+  return (
+    <div>
+      <h1 className="text-2xl font-extrabold mb-4" style={{ fontFamily: "'Baloo 2', sans-serif", color: "#9C1B47" }}>{t("contact_title")}</h1>
+      <div className="space-y-3">
+        <a href={`https://instagram.com/${settings.instagram}`} target="_blank" rel="noopener noreferrer" className="card flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: "linear-gradient(45deg,#f58529,#dd2a7b,#8134af)" }}><Instagram size={20} /></div>
+          <div>
+            <div className="text-xs opacity-60 font-bold">{t("follow_us")}</div>
+            <div className="font-extrabold" dir="ltr">@{settings.instagram}</div>
+          </div>
+        </a>
+
+        {branches.map((b) => (
+          <a key={b.id} href={telHref(b.phone)} className="card flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: "#9C1B47" }}><Phone size={20} /></div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs opacity-60 font-bold">{b.name[lang]}</div>
+              <div className="font-extrabold" dir="ltr">{b.phone}</div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   ADMIN PAGE
+============================================================ */
+
+function AdminPage({ t, lang, adminAuthed, setAdminAuthed, dishes, setDishes, offers, setOffers, settings, setSettings, branches, setBranches, selectedBranchId, setSelectedBranchId }) {
+  const [pwd, setPwd] = useState("");
+  const [err, setErr] = useState(false);
+  const [tab, setTab] = useState("dishes");
+
+  if (!adminAuthed) {
+    return (
+      <div className="max-w-sm mx-auto mt-10">
+        <div className="card text-center">
+          <Lock size={32} className="mx-auto mb-2" style={{ color: "#9C1B47" }} />
+          <h2 className="font-extrabold text-lg mb-4">{t("admin_login_title")}</h2>
+          <input
+            type="password" value={pwd} onChange={(e) => { setPwd(e.target.value); setErr(false); }}
+            placeholder={t("admin_password")} className="input mb-2"
+            onKeyDown={(e) => e.key === "Enter" && (pwd === settings.adminPassword ? setAdminAuthed(true) : setErr(true))}
+          />
+          {err && <p className="text-sm font-bold mb-2" style={{ color: "#C62828" }}>{t("wrong_password")}</p>}
+          <button
+            onClick={() => (pwd === settings.adminPassword ? setAdminAuthed(true) : setErr(true))}
+            className="btn-primary w-full justify-center"
+          >
+            {t("admin_login_btn")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-extrabold" style={{ fontFamily: "'Baloo 2', sans-serif", color: "#9C1B47" }}>{t("welcome_admin")}</h1>
+        <button onClick={() => setAdminAuthed(false)} className="btn-outline text-sm flex items-center gap-1">
+          <LogOut size={14} /> {t("admin_logout")}
+        </button>
+      </div>
+
+      <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1">
+        <CatPill active={tab === "dishes"} onClick={() => setTab("dishes")}>{t("tab_dishes")}</CatPill>
+        <CatPill active={tab === "offers"} onClick={() => setTab("offers")}>{t("tab_offers")}</CatPill>
+        <CatPill active={tab === "branches"} onClick={() => setTab("branches")}>{t("tab_branches")}</CatPill>
+        <CatPill active={tab === "about"} onClick={() => setTab("about")}>{t("tab_about")}</CatPill>
+        <CatPill active={tab === "settings"} onClick={() => setTab("settings")}>{t("tab_settings")}</CatPill>
+      </div>
+
+      {tab === "dishes" && <AdminDishes t={t} lang={lang} dishes={dishes} setDishes={setDishes} branches={branches} />}
+      {tab === "offers" && <AdminOffers t={t} lang={lang} offers={offers} setOffers={setOffers} />}
+      {tab === "branches" && <AdminBranches t={t} lang={lang} branches={branches} setBranches={setBranches} dishes={dishes} setDishes={setDishes} selectedBranchId={selectedBranchId} setSelectedBranchId={setSelectedBranchId} />}
+      {tab === "about" && <AdminAbout t={t} settings={settings} setSettings={setSettings} />}
+      {tab === "settings" && <AdminSettings t={t} settings={settings} setSettings={setSettings} />}
+    </div>
+  );
+}
+
+/* -------- Admin: Dishes -------- */
+
+const emptyDish = (branches) => ({
+  id: "d" + Date.now(), category: "burgers", emoji: "🍔", image: "", tag: "",
+  name: { ar: "", en: "", fr: "" }, desc: { ar: "", en: "", fr: "" },
+  prices: Object.fromEntries(branches.map((b) => [b.id, 0])),
+  ratingSum: 0, ratingCount: 0,
+});
+
+function AdminDishes({ t, lang, dishes, setDishes, branches }) {
+  const [editing, setEditing] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  const persist = async (updated) => { setDishes(updated); await saveShared(STORAGE_KEYS.dishes, updated); };
+
+  const startNew = () => setEditing(emptyDish(branches));
+  const startEdit = (d) => setEditing({ ...d, name: { ...d.name }, desc: { ...d.desc }, prices: { ...d.prices } });
+
+  const save = async () => {
+    const exists = dishes.find((d) => d.id === editing.id);
+    const updated = exists ? dishes.map((d) => (d.id === editing.id ? editing : d)) : [...dishes, editing];
+    await persist(updated);
+    setEditing(null);
+  };
+
+  const remove = async (id) => {
+    await persist(dishes.filter((d) => d.id !== id));
+  };
+
+  const handleFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const dataUrl = await fileToCompressedDataUrl(file, 640, 0.65);
+      setEditing((prev) => ({ ...prev, image: dataUrl }));
+    } catch (err) {
+      console.error(err);
+    }
+    setUploading(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="card max-w-lg">
+        <h3 className="font-extrabold mb-3">{dishes.find((d) => d.id === editing.id) ? t("edit_dish") : t("add_dish")}</h3>
+
+        <div className="mb-3">
+          <label className="text-xs font-bold opacity-60 block mb-1">{t("upload_image")}</label>
+          {editing.image && (
+            <div className="relative inline-block mb-2">
+              <img src={editing.image} className="w-24 h-24 object-cover rounded-xl" />
+              <button onClick={() => setEditing({ ...editing, image: "" })} className="absolute -top-2 -end-2 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          <input type="file" accept="image/*" onChange={handleFile} className="input" />
+          {uploading && <p className="text-xs opacity-60 mt-1">{t("processing_image")}</p>}
+          <p className="text-xs opacity-50 mt-1">{t("image_hint")}</p>
+        </div>
+
+        <div className="grid sm:grid-cols-3 gap-2 mb-2">
+          <input className="input" placeholder={t("dish_name_ar")} value={editing.name.ar} onChange={(e) => setEditing({ ...editing, name: { ...editing.name, ar: e.target.value } })} />
+          <input className="input" placeholder={t("dish_name_en")} value={editing.name.en} onChange={(e) => setEditing({ ...editing, name: { ...editing.name, en: e.target.value } })} />
+          <input className="input" placeholder={t("dish_name_fr")} value={editing.name.fr} onChange={(e) => setEditing({ ...editing, name: { ...editing.name, fr: e.target.value } })} />
+        </div>
+        <div className="grid sm:grid-cols-3 gap-2 mb-2">
+          <input className="input" placeholder={t("dish_desc_ar")} value={editing.desc.ar} onChange={(e) => setEditing({ ...editing, desc: { ...editing.desc, ar: e.target.value } })} />
+          <input className="input" placeholder={t("dish_desc_en")} value={editing.desc.en} onChange={(e) => setEditing({ ...editing, desc: { ...editing.desc, en: e.target.value } })} />
+          <input className="input" placeholder={t("dish_desc_fr")} value={editing.desc.fr} onChange={(e) => setEditing({ ...editing, desc: { ...editing.desc, fr: e.target.value } })} />
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-2 mb-2">
+          <select className="input" value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })}>
+            {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c[lang]}</option>)}
+          </select>
+          <input className="input" placeholder={t("dish_emoji")} value={editing.emoji} onChange={(e) => setEditing({ ...editing, emoji: e.target.value })} />
+        </div>
+
+        <div className="mb-2">
+          <select className="input" value={editing.tag} onChange={(e) => setEditing({ ...editing, tag: e.target.value })}>
+            <option value="">{t("tag_none")}</option>
+            <option value="new">{t("tag_new")}</option>
+            <option value="best">{t("tag_best")}</option>
+          </select>
+        </div>
+
+        <div className="border-t pt-3 mb-3" style={{ borderColor: "#F1DCD0" }}>
+          <div className="grid sm:grid-cols-3 gap-2">
+            {branches.map((b) => (
+              <div key={b.id}>
+                <label className="text-xs font-bold opacity-60 block mb-1">{t("price_for")} {b.name[lang]}</label>
+                <input
+                  type="number" className="input"
+                  value={editing.prices?.[b.id] ?? 0}
+                  onChange={(e) => setEditing({ ...editing, prices: { ...editing.prices, [b.id]: Number(e.target.value) } })}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button onClick={save} className="btn-primary flex items-center gap-1"><Save size={16} /> {t("save")}</button>
+          <button onClick={() => setEditing(null)} className="btn-outline flex items-center gap-1"><X size={16} /> {t("cancel")}</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button onClick={startNew} className="btn-primary mb-4 flex items-center gap-1"><Plus size={16} /> {t("add_dish")}</button>
+      <div className="space-y-2">
+        {dishes.map((d) => (
+          <div key={d.id} className="card flex items-center gap-3">
+            <div className="text-3xl w-10 h-10 flex items-center justify-center flex-shrink-0">{d.image ? <img src={d.image} className="w-10 h-10 rounded-lg object-cover" /> : d.emoji}</div>
+            <div className="flex-1 min-w-0">
+              <div className="font-extrabold truncate">{d.name[lang] || d.name.ar}</div>
+              <div className="text-xs opacity-60">{catLabel(d.category, lang)} · {getPrice(d, branches[0]?.id, branches)} {t("price_unit")}</div>
+            </div>
+            <button onClick={() => startEdit(d)} className="icon-btn"><Pencil size={16} /></button>
+            <button onClick={() => remove(d.id)} className="icon-btn" style={{ color: "#C62828" }}><Trash2 size={16} /></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* -------- Admin: Offers -------- */
+
+const emptyOffer = () => ({ id: "o" + Date.now(), emoji: "🔥", discount: 10, title: { ar: "", en: "", fr: "" }, desc: { ar: "", en: "", fr: "" } });
+
+function AdminOffers({ t, lang, offers, setOffers }) {
+  const [editing, setEditing] = useState(null);
+  const persist = async (updated) => { setOffers(updated); await saveShared(STORAGE_KEYS.offers, updated); };
+
+  const save = async () => {
+    const exists = offers.find((o) => o.id === editing.id);
+    const updated = exists ? offers.map((o) => (o.id === editing.id ? editing : o)) : [...offers, editing];
+    await persist(updated);
+    setEditing(null);
+  };
+  const remove = async (id) => await persist(offers.filter((o) => o.id !== id));
+
+  if (editing) {
+    return (
+      <div className="card max-w-lg">
+        <h3 className="font-extrabold mb-3">{offers.find((o) => o.id === editing.id) ? t("edit") : t("add_offer")}</h3>
+        <div className="grid sm:grid-cols-3 gap-2 mb-2">
+          <input className="input" placeholder={t("offer_title_ar")} value={editing.title.ar} onChange={(e) => setEditing({ ...editing, title: { ...editing.title, ar: e.target.value } })} />
+          <input className="input" placeholder={t("offer_title_en")} value={editing.title.en} onChange={(e) => setEditing({ ...editing, title: { ...editing.title, en: e.target.value } })} />
+          <input className="input" placeholder={t("offer_title_fr")} value={editing.title.fr} onChange={(e) => setEditing({ ...editing, title: { ...editing.title, fr: e.target.value } })} />
+        </div>
+        <div className="grid sm:grid-cols-3 gap-2 mb-2">
+          <input className="input" placeholder={t("offer_desc_ar")} value={editing.desc.ar} onChange={(e) => setEditing({ ...editing, desc: { ...editing.desc, ar: e.target.value } })} />
+          <input className="input" placeholder={t("offer_desc_en")} value={editing.desc.en} onChange={(e) => setEditing({ ...editing, desc: { ...editing.desc, en: e.target.value } })} />
+          <input className="input" placeholder={t("offer_desc_fr")} value={editing.desc.fr} onChange={(e) => setEditing({ ...editing, desc: { ...editing.desc, fr: e.target.value } })} />
+        </div>
+        <div className="grid sm:grid-cols-2 gap-2 mb-3">
+          <input className="input" placeholder={t("offer_emoji")} value={editing.emoji} onChange={(e) => setEditing({ ...editing, emoji: e.target.value })} />
+          <input type="number" className="input" placeholder={t("offer_discount")} value={editing.discount} onChange={(e) => setEditing({ ...editing, discount: Number(e.target.value) })} />
+        </div>
+        <div className="flex gap-2">
+          <button onClick={save} className="btn-primary flex items-center gap-1"><Save size={16} /> {t("save")}</button>
+          <button onClick={() => setEditing(null)} className="btn-outline flex items-center gap-1"><X size={16} /> {t("cancel")}</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button onClick={() => setEditing(emptyOffer())} className="btn-primary mb-4 flex items-center gap-1"><Plus size={16} /> {t("add_offer")}</button>
+      <div className="space-y-2">
+        {offers.map((o) => (
+          <div key={o.id} className="card flex items-center gap-3">
+            <div className="text-3xl">{o.emoji}</div>
+            <div className="flex-1 min-w-0">
+              <div className="font-extrabold truncate">{o.title[lang] || o.title.ar}</div>
+              <div className="text-xs opacity-60">{o.discount}% {t("offer_discount")}</div>
+            </div>
+            <button onClick={() => setEditing({ ...o, title: { ...o.title }, desc: { ...o.desc } })} className="icon-btn"><Pencil size={16} /></button>
+            <button onClick={() => remove(o.id)} className="icon-btn" style={{ color: "#C62828" }}><Trash2 size={16} /></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* -------- Admin: Branches -------- */
+
+const emptyBranch = () => ({
+  id: "br" + Date.now(),
+  name: { ar: "", en: "", fr: "" },
+  address: "", phone: "", mapsUrl: "",
+  hours: { ar: "", en: "", fr: "" },
+});
+
+function AdminBranches({ t, lang, branches, setBranches, dishes, setDishes, selectedBranchId, setSelectedBranchId }) {
+  const [editing, setEditing] = useState(null);
+
+  const save = async () => {
+    const exists = branches.find((b) => b.id === editing.id);
+    let updatedBranches;
+    if (exists) {
+      updatedBranches = branches.map((b) => (b.id === editing.id ? editing : b));
+    } else {
+      updatedBranches = [...branches, editing];
+      // give every dish a price entry for the new branch
+      const updatedDishes = dishes.map((d) => ({ ...d, prices: { ...d.prices, [editing.id]: d.prices?.[branches[0]?.id] ?? 0 } }));
+      setDishes(updatedDishes);
+      await saveShared(STORAGE_KEYS.dishes, updatedDishes);
+    }
+    setBranches(updatedBranches);
+    await saveShared(STORAGE_KEYS.branches, updatedBranches);
+    setEditing(null);
+  };
+
+  const remove = async (id) => {
+    if (branches.length <= 1) return;
+    const updatedBranches = branches.filter((b) => b.id !== id);
+    setBranches(updatedBranches);
+    await saveShared(STORAGE_KEYS.branches, updatedBranches);
+
+    const updatedDishes = dishes.map((d) => {
+      const prices = { ...d.prices };
+      delete prices[id];
+      return { ...d, prices };
+    });
+    setDishes(updatedDishes);
+    await saveShared(STORAGE_KEYS.dishes, updatedDishes);
+
+    if (selectedBranchId === id) {
+      setSelectedBranchId(updatedBranches[0]?.id);
+      await savePersonal("checkin:selected-branch", updatedBranches[0]?.id);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="card max-w-lg">
+        <h3 className="font-extrabold mb-3">{branches.find((b) => b.id === editing.id) ? t("edit_branch") : t("add_branch")}</h3>
+        <div className="grid sm:grid-cols-3 gap-2 mb-2">
+          <input className="input" placeholder={t("branch_name_ar")} value={editing.name.ar} onChange={(e) => setEditing({ ...editing, name: { ...editing.name, ar: e.target.value } })} />
+          <input className="input" placeholder={t("branch_name_en")} value={editing.name.en} onChange={(e) => setEditing({ ...editing, name: { ...editing.name, en: e.target.value } })} />
+          <input className="input" placeholder={t("branch_name_fr")} value={editing.name.fr} onChange={(e) => setEditing({ ...editing, name: { ...editing.name, fr: e.target.value } })} />
+        </div>
+        <input className="input mb-2" placeholder={t("branch_address")} value={editing.address} onChange={(e) => setEditing({ ...editing, address: e.target.value })} />
+        <input className="input mb-2" placeholder={t("branch_phone")} dir="ltr" value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} />
+        <input className="input mb-1" placeholder={t("branch_maps")} dir="ltr" value={editing.mapsUrl} onChange={(e) => setEditing({ ...editing, mapsUrl: e.target.value })} />
+        <p className="text-xs opacity-50 mb-3">{t("branch_maps_hint")}</p>
+        <div className="grid sm:grid-cols-3 gap-2 mb-3">
+          <input className="input" placeholder={t("branch_hours_ar")} value={editing.hours.ar} onChange={(e) => setEditing({ ...editing, hours: { ...editing.hours, ar: e.target.value } })} />
+          <input className="input" placeholder={t("branch_hours_en")} value={editing.hours.en} onChange={(e) => setEditing({ ...editing, hours: { ...editing.hours, en: e.target.value } })} />
+          <input className="input" placeholder={t("branch_hours_fr")} value={editing.hours.fr} onChange={(e) => setEditing({ ...editing, hours: { ...editing.hours, fr: e.target.value } })} />
+        </div>
+        <div className="flex gap-2">
+          <button onClick={save} className="btn-primary flex items-center gap-1"><Save size={16} /> {t("save")}</button>
+          <button onClick={() => setEditing(null)} className="btn-outline flex items-center gap-1"><X size={16} /> {t("cancel")}</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button onClick={() => setEditing(emptyBranch())} className="btn-primary mb-4 flex items-center gap-1"><Plus size={16} /> {t("add_branch")}</button>
+      <div className="space-y-2">
+        {branches.map((b) => (
+          <div key={b.id} className="card flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: "#9C1B47" }}><MapPin size={18} /></div>
+            <div className="flex-1 min-w-0">
+              <div className="font-extrabold truncate">{b.name[lang] || b.name.ar}</div>
+              <div className="text-xs opacity-60 truncate">{b.address}</div>
+            </div>
+            <button onClick={() => setEditing({ ...b, name: { ...b.name }, hours: { ...b.hours } })} className="icon-btn"><Pencil size={16} /></button>
+            {branches.length > 1 && <button onClick={() => remove(b.id)} className="icon-btn" style={{ color: "#C62828" }}><Trash2 size={16} /></button>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* -------- Admin: About -------- */
+
+function AdminAbout({ t, settings, setSettings }) {
+  const [form, setForm] = useState({ ar: settings.about.ar, en: settings.about.en, fr: settings.about.fr });
+  const [saved, setSaved] = useState(false);
+
+  const save = async () => {
+    const updated = { ...settings, about: { ar: form.ar, en: form.en, fr: form.fr } };
+    setSettings(updated);
+    await saveShared(STORAGE_KEYS.settings, updated);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  return (
+    <div className="card max-w-lg space-y-3">
+      <div>
+        <label className="text-xs font-bold opacity-60">{t("about_edit_ar")}</label>
+        <textarea className="input" rows={4} value={form.ar} onChange={(e) => setForm({ ...form, ar: e.target.value })} />
+      </div>
+      <div>
+        <label className="text-xs font-bold opacity-60">{t("about_edit_en")}</label>
+        <textarea className="input" rows={4} value={form.en} onChange={(e) => setForm({ ...form, en: e.target.value })} />
+      </div>
+      <div>
+        <label className="text-xs font-bold opacity-60">{t("about_edit_fr")}</label>
+        <textarea className="input" rows={4} value={form.fr} onChange={(e) => setForm({ ...form, fr: e.target.value })} />
+      </div>
+      <button onClick={save} className="btn-primary flex items-center gap-1"><Save size={16} /> {t("save")}</button>
+      {saved && <p className="text-sm font-bold" style={{ color: "#2E7D32" }}>{t("settings_saved")}</p>}
+    </div>
+  );
+}
+
+/* -------- Admin: Settings -------- */
+
+function AdminSettings({ t, settings, setSettings }) {
+  const [form, setForm] = useState({ instagram: settings.instagram, newPassword: "" });
+  const [saved, setSaved] = useState(false);
+
+  const save = async () => {
+    const updated = {
+      ...settings,
+      instagram: form.instagram.replace("@", "").trim(),
+      adminPassword: form.newPassword.trim() ? form.newPassword.trim() : settings.adminPassword,
+    };
+    setSettings(updated);
+    await saveShared(STORAGE_KEYS.settings, updated);
+    setForm({ ...form, newPassword: "" });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  return (
+    <div className="card max-w-lg space-y-3">
+      <div>
+        <label className="text-xs font-bold opacity-60">{t("instagram_handle")}</label>
+        <input className="input" value={form.instagram} onChange={(e) => setForm({ ...form, instagram: e.target.value })} dir="ltr" />
+      </div>
+      <div className="border-t pt-3" style={{ borderColor: "#F1DCD0" }}>
+        <label className="text-xs font-bold opacity-60">{t("change_password")}</label>
+        <input type="password" className="input" placeholder={t("new_password")} value={form.newPassword} onChange={(e) => setForm({ ...form, newPassword: e.target.value })} dir="ltr" />
+      </div>
+      <button onClick={save} className="btn-primary flex items-center gap-1"><Save size={16} /> {t("save")}</button>
+      {saved && <p className="text-sm font-bold" style={{ color: "#2E7D32" }}>{t("settings_saved")}</p>}
+    </div>
+  );
+}
+
+/* ============================================================
+   GLOBAL STYLE
+============================================================ */
+
+function GlobalStyle() {
+  return (
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Baloo+2:wght@600;700;800&family=Baloo+Bhaijaan+2:wght@600;700;800&display=swap');
+
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+
+      [dir="rtl"] h1, [dir="rtl"] h2, [dir="rtl"] h3, [dir="rtl"] .font-extrabold[style*="Baloo 2"] {
+        font-family: 'Baloo Bhaijaan 2', 'Cairo', sans-serif !important;
+      }
+
+      .card {
+        background: #fff;
+        border-radius: 1.25rem;
+        padding: 1rem;
+        box-shadow: 0 2px 12px rgba(156,27,71,0.06);
+        border: 1px solid #F6E9E2;
+      }
+
+      .input {
+        width: 100%;
+        border: 1.5px solid #F1DCD0;
+        border-radius: 0.75rem;
+        padding: 0.6rem 0.9rem;
+        font-family: inherit;
+        font-size: 0.95rem;
+        outline: none;
+        background: #fff;
+        color: #2B1820;
+        margin-top: 0.2rem;
+      }
+      .input:focus { border-color: #9C1B47; }
+
+      .btn-primary {
+        background: #9C1B47;
+        color: #fff;
+        font-weight: 800;
+        padding: 0.7rem 1.4rem;
+        border-radius: 0.9rem;
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: transform 0.15s, box-shadow 0.15s;
+        text-decoration: none;
+      }
+      .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(156,27,71,0.25); }
+
+      .btn-accent {
+        background: #FFB627;
+        color: #5E1129;
+        font-weight: 800;
+        padding: 0.8rem 1.6rem;
+        border-radius: 0.9rem;
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: transform 0.15s;
+      }
+      .btn-accent:hover { transform: translateY(-2px); }
+
+      .btn-outline {
+        border: 1.5px solid #9C1B47;
+        color: #9C1B47;
+        font-weight: 800;
+        padding: 0.6rem 1.2rem;
+        border-radius: 0.9rem;
+        background: transparent;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        text-decoration: none;
+      }
+
+      .btn-outline-light {
+        border: 1.5px solid rgba(255,255,255,0.6);
+        color: #fff;
+        font-weight: 800;
+        padding: 0.8rem 1.6rem;
+        border-radius: 0.9rem;
+        background: rgba(255,255,255,0.08);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        text-decoration: none;
+        transition: background 0.15s;
+      }
+      .btn-outline-light:hover { background: rgba(255,255,255,0.18); }
+
+      .icon-btn {
+        width: 2.2rem; height: 2.2rem;
+        border-radius: 0.7rem;
+        display: flex; align-items: center; justify-content: center;
+        background: #FFF1E3;
+        border: none;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+
+      .branch-pill {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: #FBE7EE;
+        color: #9C1B47;
+        font-weight: 800;
+        font-size: 0.78rem;
+        padding: 0.35rem 0.8rem;
+        border-radius: 999px;
+        border: none;
+        max-width: 100%;
+        cursor: pointer;
+      }
+
+      .sticker {
+        box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+      }
+
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+      @keyframes pulse-slow {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.08); }
+      }
+      .animate-pulse-slow { animation: pulse-slow 2.5s ease-in-out infinite; }
+
+      @keyframes slidein {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      [dir="rtl"] .animate-slidein { animation-name: slidein-rtl; }
+      @keyframes slidein-rtl {
+        from { transform: translateX(-100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      .animate-slidein { animation: slidein 0.25s ease-out; }
+
+      @keyframes spin-slow {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      .logo-spin { animation: spin-slow 2s linear infinite; display: inline-block; }
+    `}</style>
+  );
+}
