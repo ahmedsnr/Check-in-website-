@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Public restaurant website: anyone can read the menu/branches/etc,
+    // and anyone can write (the "admin panel" access is gated only by
+    // the in-app password, not by Firestore rules).
+    // This is fine for a small single-restaurant site, but keep the
+    // admin password private.
+    match /checkin/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
